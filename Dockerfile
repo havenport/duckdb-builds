@@ -32,6 +32,18 @@ RUN git clone --branch "${VCPKG_REF}" \
 RUN <<'BASH'
 set -euo pipefail
 
+mkdir vcpkg-triplets
+for arch in x64 arm64; do
+  cp "vcpkg/triplets/${arch}-linux.cmake" \
+    "vcpkg-triplets/${arch}-linux-release.cmake"
+  printf '\nset(VCPKG_BUILD_TYPE release)\n' \
+    >> "vcpkg-triplets/${arch}-linux-release.cmake"
+done
+BASH
+
+RUN <<'BASH'
+set -euo pipefail
+
 PRECOMPILED_EXTENSIONS=(
   "aws"
   "core_functions"
@@ -49,13 +61,24 @@ PRECOMPILED_EXTENSIONS=(
 
 CORE_EXTENSIONS="$(IFS=';'; printf '%s' "${PRECOMPILED_EXTENSIONS[*]}")"
 
+case "$(dpkg --print-architecture)" in
+  amd64) VCPKG_TRIPLET=x64-linux-release ;;
+  arm64) VCPKG_TRIPLET=arm64-linux-release ;;
+  *)
+    echo "Unsupported vcpkg architecture: $(dpkg --print-architecture)" >&2
+    exit 1
+    ;;
+esac
+
 cd "duckdb-${VERSION}"
 CORE_EXTENSIONS="${CORE_EXTENSIONS}" \
   EXTENSION_STATIC_BUILD=1 \
   DISABLE_EXTENSION_LOAD="${DISABLE_EXTENSION_LOAD}" \
   USE_MERGED_VCPKG_MANIFEST=1 \
   VCPKG_DISABLE_METRICS=1 \
+  VCPKG_OVERLAY_TRIPLETS="/home/builder/build/vcpkg-triplets" \
   VCPKG_TOOLCHAIN_PATH="/home/builder/build/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+  VCPKG_TARGET_TRIPLET="${VCPKG_TRIPLET}" \
   OVERRIDE_GIT_DESCRIBE="v${VERSION}" \
   GEN=ninja \
   BUILD_UNITTESTS=0 \
