@@ -1,6 +1,7 @@
 name: build-duckdb
 
 on:
+  push:
   workflow_dispatch:
 
 env:
