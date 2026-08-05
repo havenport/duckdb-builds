@@ -25,7 +25,7 @@ RUN curl --fail --location --retry 3 -o "duckdb-${VERSION}.tar.gz" \
     && tar xzf "duckdb-${VERSION}.tar.gz" \
     && rm "duckdb-${VERSION}.tar.gz"
 
-RUN git clone --depth 1 --branch "${VCPKG_REF}" \
+RUN git clone --branch "${VCPKG_REF}" \
       https://github.com/microsoft/vcpkg.git vcpkg \
     && ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
