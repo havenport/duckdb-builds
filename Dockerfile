@@ -71,6 +71,10 @@ case "$(dpkg --print-architecture)" in
 esac
 
 cd "duckdb-${VERSION}"
+
+FETCHCONTENT_CACHE="/home/builder/build/_fetchcontent_cache"
+mkdir -p "${FETCHCONTENT_CACHE}"
+
 CORE_EXTENSIONS="${CORE_EXTENSIONS}" \
   EXTENSION_STATIC_BUILD=1 \
   DISABLE_EXTENSION_LOAD="${DISABLE_EXTENSION_LOAD}" \
@@ -82,6 +86,7 @@ CORE_EXTENSIONS="${CORE_EXTENSIONS}" \
   OVERRIDE_GIT_DESCRIBE="v${VERSION}" \
   GEN=ninja \
   BUILD_UNITTESTS=0 \
+  EXTRA_CMAKE_VARIABLES="-DFETCHCONTENT_BASE_DIR=${FETCHCONTENT_CACHE}" \
   make -j"${JOBS:-$(nproc)}" bundle-library
 BASH
 
