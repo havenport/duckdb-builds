@@ -68,40 +68,40 @@ jobs:
           path: libduckdb-v${{ env.VSN }}-linux-${{ matrix.arch }}-${{ matrix.variant }}.tar.gz
           if-no-files-found: error
 
-  # release:
-  #   name: release-v${{ env.VSN }}
-  #   needs: build
-  #   runs-on: ubuntu-26.04
-  #   permissions:
-  #     contents: write
-  #   steps:
-  #     - name: Download release archives
-  #       uses: actions/download-artifact@v8
-  #       with:
-  #         pattern: libduckdb-v${{ env.VSN }}-linux-*
-  #         path: artifacts
-  #         merge-multiple: true
+  release:
+    name: release-v${{ env.VSN }}
+    needs: build
+    runs-on: blacksmith-8vcpu-ubuntu-2204
+    permissions:
+      contents: write
+    steps:
+      - name: Download release archives
+        uses: actions/download-artifact@v8
+        with:
+          pattern: libduckdb-v${{ env.VSN }}-linux-*
+          path: artifacts
+          merge-multiple: true
 
-  #     - name: Create or update release
-  #       env:
-  #         GH_TOKEN: ${{ github.token }}
-  #         REPOSITORY: ${{ github.repository }}
-  #         TARGET: ${{ github.sha }}
-  #       run: |
-  #         shopt -s nullglob
-  #         assets=(artifacts/*.tar.gz)
-  #         if [ "${#assets[@]}" -ne 4 ]; then
-  #           echo "Expected four release archives, found ${#assets[@]}." >&2
-  #           exit 1
-  #         fi
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET: ${{ github.sha }}
+        run: |
+          shopt -s nullglob
+          assets=(artifacts/*.tar.gz)
+          if [ "${#assets[@]}" -ne 4 ]; then
+            echo "Expected four release archives, found ${#assets[@]}." >&2
+            exit 1
+          fi
 
-  #         tag="v${VSN}"
-  #         if gh release view "${tag}" --repo "${REPOSITORY}" >/dev/null 2>&1; then
-  #           gh release upload "${tag}" "${assets[@]}" --clobber --repo "${REPOSITORY}"
-  #         else
-  #           gh release create "${tag}" "${assets[@]}" \
-  #             --repo "${REPOSITORY}" \
-  #             --target "${TARGET}" \
-  #             --title "DuckDB v${VSN}" \
-  #             --notes "Static DuckDB bundle libraries for Linux AMD64 and ARM64."
-  #         fi
+          tag="v${VSN}"
+          if gh release view "${tag}" --repo "${REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${assets[@]}" --clobber --repo "${REPOSITORY}"
+          else
+            gh release create "${tag}" "${assets[@]}" \
+              --repo "${REPOSITORY}" \
+              --target "${TARGET}" \
+              --title "DuckDB v${VSN}" \
+              --notes "Static DuckDB bundle libraries for Linux AMD64 and ARM64."
+          fi
