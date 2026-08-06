@@ -49,14 +49,12 @@ PRECOMPILED_EXTENSIONS=(
   "core_functions"
   "ducklake"
   "excel"
-  "fts"
   "httpfs"
   "icu"
   "inet"
   "json"
   "parquet"
   "quack"
-  "spatial"
 )
 
 CORE_EXTENSIONS="$(IFS=';'; printf '%s' "${PRECOMPILED_EXTENSIONS[*]}")"
