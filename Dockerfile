@@ -87,17 +87,17 @@ CORE_EXTENSIONS="${CORE_EXTENSIONS}" \
   GEN=ninja \
   BUILD_UNITTESTS=0 \
   EXTRA_CMAKE_VARIABLES="-DFETCHCONTENT_BASE_DIR=${FETCHCONTENT_CACHE}" \
-  make -j"${JOBS:-$(nproc)}" bundle-library
+  make -j"${JOBS:-$(nproc)}" release
 BASH
 
 RUN set -eu; \
-    BUNDLE_PATH="duckdb-${VERSION}/build/release/libduckdb_bundle.a"; \
-    if [ ! -f "${BUNDLE_PATH}" ]; then \
-      echo "Could not find libduckdb_bundle.a. Build failed." >&2; \
+    LIB_PATH="$(find "duckdb-${VERSION}/build/release" -maxdepth 3 -name 'libduckdb.so' | head -1)"; \
+    if [ -z "${LIB_PATH}" ]; then \
+      echo "Could not find libduckdb.so. Build failed." >&2; \
       exit 1; \
     fi; \
     mkdir -p "release/include"; \
-    cp "${BUNDLE_PATH}" "release/"; \
+    cp "${LIB_PATH}" "release/"; \
     cp -r "duckdb-${VERSION}/src/include/." "release/include/"; \
     cp "duckdb-${VERSION}/LICENSE" "release/"; \
     tar -czf "release.tar.gz" "release"; \

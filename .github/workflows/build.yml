@@ -103,5 +103,5 @@ jobs:
               --repo "${REPOSITORY}" \
               --target "${TARGET}" \
               --title "DuckDB v${VSN}" \
-              --notes "Static DuckDB bundle libraries for Linux AMD64 and ARM64."
+              --notes "libduckdb.so with extensions for Linux AMD64 and ARM64"
           fi
