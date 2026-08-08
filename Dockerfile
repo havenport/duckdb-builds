@@ -3,7 +3,7 @@ FROM debian:13 AS build
 
 ARG VERSION
 ARG JOBS=""
-ARG VCPKG_REF=2026.07.29
+ARG VCPKG_REF=2026.04.27
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential cmake ninja-build curl git ca-certificates python3 \
