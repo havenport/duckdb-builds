@@ -1,11 +1,7 @@
 # syntax=docker/dockerfile:1
+FROM debian:13 AS build
 
-# Build one DuckDB bundle release archive for the selected Linux architecture and
-# extension-loading policy.
-FROM debian:13
-
-ARG VERSION=1.5.5
-ARG DISABLE_EXTENSION_LOAD=1
+ARG VERSION
 ARG JOBS=""
 ARG VCPKG_REF=2026.04.27
 
@@ -20,12 +16,13 @@ WORKDIR /home/builder/build
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN curl --fail --location --retry 3 -o "duckdb-${VERSION}.tar.gz" \
+RUN test -n "${VERSION}" \
+    && curl --fail --location --retry 3 -o "duckdb-${VERSION}.tar.gz" \
       "https://github.com/duckdb/duckdb/archive/refs/tags/v${VERSION}.tar.gz" \
     && tar xzf "duckdb-${VERSION}.tar.gz" \
     && rm "duckdb-${VERSION}.tar.gz"
 
-RUN git clone --branch "${VCPKG_REF}" \
+RUN git clone --depth 1 --single-branch --branch "${VCPKG_REF}" \
       https://github.com/microsoft/vcpkg.git vcpkg \
     && ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
@@ -75,7 +72,6 @@ mkdir -p "${FETCHCONTENT_CACHE}"
 
 CORE_EXTENSIONS="${CORE_EXTENSIONS}" \
   EXTENSION_STATIC_BUILD=1 \
-  DISABLE_EXTENSION_LOAD="${DISABLE_EXTENSION_LOAD}" \
   USE_MERGED_VCPKG_MANIFEST=1 \
   VCPKG_DISABLE_METRICS=1 \
   VCPKG_OVERLAY_TRIPLETS="/home/builder/build/vcpkg-triplets" \
@@ -88,17 +84,23 @@ CORE_EXTENSIONS="${CORE_EXTENSIONS}" \
   make -j"${JOBS:-$(nproc)}" release
 BASH
 
-RUN set -eu; \
-    LIB_PATH="$(find "duckdb-${VERSION}/build/release" -maxdepth 3 -name 'libduckdb.so' | head -1)"; \
-    if [ -z "${LIB_PATH}" ]; then \
-      echo "Could not find libduckdb.so. Build failed." >&2; \
-      exit 1; \
-    fi; \
-    mkdir -p "release/include"; \
-    cp "${LIB_PATH}" "release/"; \
-    cp -r "duckdb-${VERSION}/src/include/." "release/include/"; \
-    cp "duckdb-${VERSION}/LICENSE" "release/"; \
-    tar -czf "release.tar.gz" "release"; \
-    rm -rf release
+RUN <<'BASH'
+set -euo pipefail
 
-# Output lives at /home/builder/build/release.tar.gz
+LIB_PATH="duckdb-${VERSION}/build/release/src/libduckdb.so"
+if [[ ! -f "${LIB_PATH}" ]]; then
+  echo "Could not find expected library at ${LIB_PATH}. Build failed." >&2
+  exit 1
+fi
+
+mkdir -p "release/include"
+cp "${LIB_PATH}" "release/"
+strip --strip-unneeded "release/libduckdb.so"
+cp -r "duckdb-${VERSION}/src/include/." "release/include/"
+cp "duckdb-${VERSION}/LICENSE" "release/"
+tar -czf "release.tar.gz" "release"
+rm -rf release
+BASH
+
+FROM scratch AS artifact
+COPY --from=build /home/builder/build/release.tar.gz /release.tar.gz

@@ -7,9 +7,12 @@ on:
 env:
   VSN: 1.5.5
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: ${{ matrix.arch }}-${{ matrix.variant }}
+    name: ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
@@ -17,55 +20,34 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            # runner: ubuntu-26.04
             runner: blacksmith-16vcpu-ubuntu-2204
-            variant: locked
-            no_load: 1
-          - arch: amd64
-            # runner: ubuntu-26.04
-            runner: blacksmith-16vcpu-ubuntu-2204
-            variant: unlocked
-            no_load: 0
           - arch: arm64
-            # runner: ubuntu-26.04-arm
             runner: blacksmith-16vcpu-ubuntu-2204-arm
-            variant: locked
-            no_load: 1
-          - arch: arm64
-            # runner: ubuntu-26.04-arm
-            runner: blacksmith-16vcpu-ubuntu-2204-arm
-            variant: unlocked
-            no_load: 0
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      # - uses: docker/setup-buildx-action@v4
       - uses: useblacksmith/setup-docker-builder@v2
         with:
-          cache-key: Dockerfile-${{ matrix.arch }}-${{ matrix.variant }}
+          cache-key: Dockerfile-${{ matrix.arch }}
 
-      # - uses: docker/build-push-action@v7
       - uses: useblacksmith/build-push-action@v2
         with:
           context: .
-          load: true
-          push: false
           platforms: linux/${{ matrix.arch }}
-          tags: duckdb-builder
+          outputs: type=local,dest=out
           build-args: |
-            DISABLE_EXTENSION_LOAD=${{ matrix.no_load }}
             VERSION=${{ env.VSN }}
-          # cache-from: type=gha,scope=duckdb-${{ matrix.arch }}-${{ matrix.variant }}
-          # cache-to: type=gha,mode=max,scope=duckdb-${{ matrix.arch }}-${{ matrix.variant }}
 
-      - run: ./extract.sh duckdb-builder
+      - run: docker buildx prune --force --max-used-space 20gb
 
-      - run: mv release.tar.gz libduckdb-v$VSN-linux-${{ matrix.arch }}-${{ matrix.variant }}.tar.gz
+      - run: mv out/release.tar.gz libduckdb-v$VSN-linux-${{ matrix.arch }}.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
-          name: libduckdb-v${{ env.VSN }}-linux-${{ matrix.arch }}-${{ matrix.variant }}
-          path: libduckdb-v${{ env.VSN }}-linux-${{ matrix.arch }}-${{ matrix.variant }}.tar.gz
+          name: libduckdb-v${{ env.VSN }}-linux-${{ matrix.arch }}
+          path: libduckdb-v${{ env.VSN }}-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
 
   release:
@@ -90,8 +72,8 @@ jobs:
         run: |
           shopt -s nullglob
           assets=(artifacts/*.tar.gz)
-          if [ "${#assets[@]}" -ne 4 ]; then
-            echo "Expected four release archives, found ${#assets[@]}." >&2
+          if [ "${#assets[@]}" -ne 2 ]; then
+            echo "Expected two release archives, found ${#assets[@]}." >&2
             exit 1
           fi
 
