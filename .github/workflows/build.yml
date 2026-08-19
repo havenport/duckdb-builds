@@ -5,14 +5,31 @@ on:
   workflow_dispatch:
 
 env:
-  VSN: 1.5.5
+  VSN: 2.0.0
 
 permissions:
   contents: read
 
 jobs:
+  resolve:
+    name: resolve-duckdb-ref
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - id: resolve
+        run: |
+          sha="$(git ls-remote https://github.com/duckdb/duckdb refs/heads/main | cut -f1)"
+          if [[ ! "${sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve duckdb/duckdb main SHA (got: '${sha}')" >&2
+            exit 1
+          fi
+          echo "Building duckdb/duckdb@${sha}"
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.arch }}
+    needs: resolve
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: true
@@ -38,7 +55,8 @@ jobs:
           platforms: linux/${{ matrix.arch }}
           outputs: type=local,dest=out
           build-args: |
-            VERSION=${{ env.VSN }}
+            DUCKDB_REF=${{ needs.resolve.outputs.sha }}
+            DUCKDB_VERSION=${{ env.VSN }}
 
       - run: docker buildx prune --force --max-used-space 20gb
 
@@ -52,7 +70,7 @@ jobs:
 
   release:
     name: release
-    needs: build
+    needs: [build, resolve]
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -69,6 +87,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TARGET: ${{ github.sha }}
+          DUCKDB_SHA: ${{ needs.resolve.outputs.sha }}
         run: |
           shopt -s nullglob
           assets=(artifacts/*.tar.gz)
@@ -77,13 +96,16 @@ jobs:
             exit 1
           fi
 
-          tag="v${VSN}"
+          tag="v${VSN}-nightly"
+          notes="Nightly build of DuckDB v${VSN} (in development), built from duckdb/duckdb@${DUCKDB_SHA}. libduckdb.so with extensions for Linux AMD64 and ARM64. This release is overwritten on every build."
           if gh release view "${tag}" --repo "${REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${tag}" "${assets[@]}" --clobber --repo "${REPOSITORY}"
+            gh release edit "${tag}" --repo "${REPOSITORY}" --notes "${notes}"
           else
             gh release create "${tag}" "${assets[@]}" \
               --repo "${REPOSITORY}" \
               --target "${TARGET}" \
-              --title "DuckDB v${VSN}" \
-              --notes "libduckdb.so with extensions for Linux AMD64 and ARM64"
+              --prerelease \
+              --title "DuckDB v${VSN} (nightly)" \
+              --notes "${notes}"
           fi
