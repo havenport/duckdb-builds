@@ -59,6 +59,8 @@ PRECOMPILED_EXTENSIONS=(
 
 CORE_EXTENSIONS="$(IFS=';'; printf '%s' "${PRECOMPILED_EXTENSIONS[*]}")"
 
+printf '%s\n' "${CORE_EXTENSIONS}" > /home/builder/build/extensions.txt
+
 case "$(dpkg --print-architecture)" in
   amd64) VCPKG_TRIPLET=x64-linux-release ;;
   arm64) VCPKG_TRIPLET=arm64-linux-release ;;
@@ -100,7 +102,17 @@ mkdir -p "release/include"
 cp "${LIB_PATH}" "release/"
 strip --strip-unneeded "release/libduckdb.so"
 cp -r "duckdb-src/src/include/." "release/include/"
+cp -r "duckdb-src/third_party/fmt/include/fmt" "release/include/"
 cp "duckdb-src/LICENSE" "release/"
+
+cat > "release/MANIFEST" <<MANIFEST
+version=${DUCKDB_VERSION}
+duckdb_ref=${DUCKDB_REF}
+arch=$(dpkg --print-architecture)
+built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+extensions=$(cat /home/builder/build/extensions.txt)
+MANIFEST
+
 tar -czf "release.tar.gz" "release"
 rm -rf release
 BASH
