@@ -50,9 +50,48 @@ jobs:
           path: libduckdb-v${{ env.VSN }}-linux-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
 
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Pack the test corpus
+        env:
+          VERSION: ${{ env.VSN }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 -o duckdb-src.tar.gz \
+            "https://github.com/duckdb/duckdb/archive/refs/tags/v${VERSION}.tar.gz"
+          mkdir duckdb-src
+          tar xzf duckdb-src.tar.gz -C duckdb-src --strip-components=1
+
+          # unzip directives reference archives as "data/storage/x.db.gz",
+          # relative to the tree root, so both paths keep their layout.
+          mkdir -p tests/test tests/data
+          cp -r duckdb-src/test/sql tests/test/sql
+          cp -r duckdb-src/data/storage tests/data/storage
+
+          cat > tests/MANIFEST <<MANIFEST
+          version=${VERSION}
+          duckdb_ref=v${VERSION}
+          built=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          test_files=$(find tests/test/sql -name '*.test' | wc -l)
+          archives=$(find tests/data -name '*.gz' | wc -l)
+          MANIFEST
+
+          tar -czf "duckdb-tests-v${VERSION}.tar.gz" -C tests .
+          cat tests/MANIFEST
+          ls -lh "duckdb-tests-v${VERSION}.tar.gz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-tests-v${{ env.VSN }}
+          path: duckdb-tests-v${{ env.VSN }}.tar.gz
+          if-no-files-found: error
+
   release:
     name: release
-    needs: build
+    needs: [build, tests]
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -60,7 +99,7 @@ jobs:
       - name: Download release archives
         uses: actions/download-artifact@v8
         with:
-          pattern: libduckdb-v${{ env.VSN }}-linux-*
+          pattern: "*-v${{ env.VSN }}*"
           path: artifacts
           merge-multiple: true
 
@@ -72,11 +111,14 @@ jobs:
         run: |
           shopt -s nullglob
           assets=(artifacts/*.tar.gz)
-          if [ "${#assets[@]}" -ne 2 ]; then
-            echo "Expected two release archives, found ${#assets[@]}." >&2
+          if [ "${#assets[@]}" -ne 3 ]; then
+            echo "Expected three release archives, found ${#assets[@]}." >&2
+            printf '  %s\n' "${assets[@]}" >&2
             exit 1
           fi
 
+          ( cd artifacts && sha256sum *.tar.gz > sha256sums.txt )
+          assets+=(artifacts/sha256sums.txt)
           tag="v${VSN}"
           if gh release view "${tag}" --repo "${REPOSITORY}" >/dev/null 2>&1; then
             gh release upload "${tag}" "${assets[@]}" --clobber --repo "${REPOSITORY}"
